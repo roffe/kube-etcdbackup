@@ -1,0 +1,53 @@
+
+# If you don't wish to use ETCD TLS verification these 2 secret can be ommited
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/tls
+metadata:
+  name: kube-etcdbackup-etcd
+  namespace: kube-system
+data:
+  tls.crt: <base64 ETCD client cert>
+  tls.key: <base64 ETCD client key>
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: kube-etcdbackup
+  namespace: kube-system
+spec:
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  schedule: "13 */12 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: kube-etcdbackup
+            image: roffe/kube-etcdbackup:latest
+            envFrom:
+            - configMapRef:
+                name: kube-etcdbackup
+            env:
+              - name: S3_ACCESS_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: kube-etcdbackup-s3
+                    key: S3_ACCESS_KEY
+              - name: S3_SECRET_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: kube-etcdbackup-s3
+                    key: S3_SECRET_KEY
+            # If you don't wish to use TLS verification volumes can be omitted
+            volumeMounts:
+            - name: etcd-client-certs
+              mountPath: "/ssl"
+              readOnly: true
+          volumes:
+          - name: etcd-client-certs
+            secret:
+              secretName: kube-etcdbackup-etcd
+         
