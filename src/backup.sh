@@ -26,7 +26,7 @@ function crypt_compress_backup() {
 	tar czf /tmp/${TARFILENAME} -C /tmp etcd-backup-${FDATE}
 	if [[ ! -z "${GPG_PUBKEY}" ]]; then
 		# pgp --recipient-file does not work, use old method
-	    rm -rf $GPGHOME
+		rm -rf $GPGHOME
 		mkdir -p $GPGHOME
 		chmod 700 $GPGHOME
 		cat <<< $GPG_PUBKEY > $GPGHOME/key.pub
@@ -90,8 +90,6 @@ etcdctl snapshot save /tmp/etcd-backup-${FDATE}/etcd-dump.bin || exit 1
 
 # Compress the backups to save some storage
 crypt_compress_backup
-
-cat /root/.mc/config.json
 
 S3_PATH="${S3_BUCKET}"
 
