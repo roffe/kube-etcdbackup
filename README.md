@@ -9,7 +9,7 @@ Docker image that takes a list of ETCD nodes and snapshots them and ships of to 
 
 ## Encryption
 
-The script can encrypt the database dump with pgp key.
+The script can encrypt the database dump with a pgp key.
 Add the armored pgp key as `GPG_PUBKEY` in the configmap.
 
 

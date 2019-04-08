@@ -36,7 +36,7 @@ data:
   ## Place the backup under following prefix (folder)
   # S3_FOLDER: etcd-backup
   ## set AUTOCLEAN to 1 for cleaning up old etcd backups
-  AUTOCLEAN: 1
+  AUTOCLEAN: "1"
   ## you can adjust the number of hold backups
   # AUTOCLEAN_ARGS: --keep-n=200 --keep-hourly=40 --keep-daily=30
   ## Add PGP public key to enable encryption

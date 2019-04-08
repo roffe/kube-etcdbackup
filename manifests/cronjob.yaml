@@ -26,7 +26,7 @@ spec:
           restartPolicy: Never
           containers:
           - name: kube-etcdbackup
-            image: roffe/kube-etcdbackup:latest
+            image: b1systems/etcd-backup:latest
             envFrom:
             - configMapRef:
                 name: kube-etcdbackup
