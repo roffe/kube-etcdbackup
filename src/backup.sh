@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+set -x
+
 # Timestamp for backup
 export FDATE=$(date '+%Y-%m-%d-%H-%M-%S')
+export GPGHOME=/tmp/gnupg
 
 # Create some temp folders
 mkdir -p /tmp/etcd-backup-${FDATE}
@@ -14,8 +17,31 @@ export TARFILENAME="etcd-backup-${FDATE}.tar.gz"
 # Required variables for container to work
 REQUIRED=('ETCDCTL_ENDPOINTS', 'S3_ALIAS', 'S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY')
 
-function compress_backup() {
+if [[ "${INSECURE:-0}" == 1 ]]; then
+	MC_ARGS="--insecure"
+fi
+
+function crypt_compress_backup() {
+	# no gpg key set, skip encryption
 	tar czf /tmp/${TARFILENAME} -C /tmp etcd-backup-${FDATE}
+	if [[ ! -z "${GPG_PUBKEY}" ]]; then
+		# pgp --recipient-file does not work, use old method
+		rm -rf $GPGHOME
+		mkdir -p $GPGHOME
+		chmod 700 $GPGHOME
+		cat <<< $GPG_PUBKEY > $GPGHOME/key.pub
+
+		gpg --homedir $GPGHOME --import $GPGHOME/key.pub
+		KEYID=`gpg --list-public-keys --batch --with-colons --homedir $GPGHOME |  grep "pub:" | cut -d: -f5`
+
+		echo "PGP encrypting for: $KEYID"
+		gpg --batch --yes --trust-model always --homedir $GPGHOME -r $KEYID -e /tmp/$TARFILENAME
+		if [ $? != 0 ]; then
+			echo "Encryption failed. Aborting backup"
+			exit 3
+		fi
+		export TARFILENAME=${TARFILENAME}.gpg
+	fi
 }
 
 # Check so all required params are set
@@ -60,13 +86,26 @@ EOF
 setup_s3
 
 # Dump the ETCD data store
-etcdctl snapshot save /tmp/etcd-backup-${FDATE}/etcd-dump.bin
+etcdctl snapshot save /tmp/etcd-backup-${FDATE}/etcd-dump.bin || exit 1
 
 # Compress the backups to save some storage
-compress_backup
+crypt_compress_backup
+
+S3_PATH="${S3_BUCKET}"
+
+if [[ ! -z "${S3_FOLDER}" ]]; then
+  S3_PATH="${S3_PATH}/${S3_FOLDER}/${TARFILENAME}"
+fi
 
 # Transfer backups to S3 storage & remove it before pod shutdown as pods are not deleted directly but scheduled for GC
-mc cp /tmp/${TARFILENAME} ${S3_ALIAS}/${S3_BUCKET} --no-color
+cd /tmp
+mc $MC_ARGS --no-color cp ${TARFILENAME} ${S3_ALIAS}/${S3_PATH} || exit 2
+cd ..
 rm -rf /tmp
 
 echo "Backup Done ✓"
+
+if [[ $AUTOCLEAN == "1" ]]; then
+	echo "Cleaning old backups"
+	/cleanup.py ${AUTOCLEAN_ARGS}
+fi
